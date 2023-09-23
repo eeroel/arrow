@@ -1656,7 +1656,7 @@ class ObjectOutputStream final : public io::OutputStream {
         HandleUploadOutcome(state, part_number, req, outcome);
         return Status::OK();
       };
-      RETURN_NOT_OK(SubmitIO(io_context_, std::move(deferred)));
+      RETURN_NOT_OK(SubmitIO(io_context_, 0, std::move(deferred)));
     }
 
     ++part_number_;
@@ -2320,6 +2320,7 @@ class S3FileSystem::Impl : public std::enable_shared_from_this<S3FileSystem::Imp
       ARROW_ASSIGN_OR_RAISE(
           auto fut,
           SubmitIO(io_context_,
+                   0,
                    [holder = holder_, req = std::move(req), delete_cb]() -> Status {
                      ARROW_ASSIGN_OR_RAISE(auto client_lock, holder->Lock());
                      return delete_cb(client_lock.Move()->DeleteObjects(req));
@@ -2344,7 +2345,7 @@ class S3FileSystem::Impl : public std::enable_shared_from_this<S3FileSystem::Imp
     }
     auto self = shared_from_this();
     return DeferNotOk(
-        SubmitIO(io_context_, [self, bucket, key]() mutable -> Result<bool> {
+        SubmitIO(io_context_, 0, [self, bucket, key]() mutable -> Result<bool> {
           S3Model::HeadObjectRequest req;
           req.SetBucket(ToAwsString(bucket));
           req.SetKey(ToAwsString(key));
@@ -2511,7 +2512,7 @@ class S3FileSystem::Impl : public std::enable_shared_from_this<S3FileSystem::Imp
       ARROW_ASSIGN_OR_RAISE(auto client_lock, self->holder_->Lock());
       return self->ProcessListBuckets(client_lock.Move()->ListBuckets());
     };
-    return DeferNotOk(SubmitIO(io_context_, std::move(deferred)));
+    return DeferNotOk(SubmitIO(io_context_, 0, std::move(deferred)));
   }
 
   Result<std::shared_ptr<ObjectInputFile>> OpenInputFile(const std::string& s,

@@ -53,10 +53,11 @@ ARROW_EXPORT
 ::arrow::internal::ThreadPool* GetIOThreadPool();
 
 template <typename... SubmitArgs>
-auto SubmitIO(IOContext io_context, SubmitArgs&&... submit_args)
+auto SubmitIO(IOContext io_context, int priority, SubmitArgs&&... submit_args)
     -> decltype(std::declval<::arrow::internal::Executor*>()->Submit(submit_args...)) {
   ::arrow::internal::TaskHints hints;
   hints.external_id = io_context.external_id();
+  hints.priority = priority;  // TODO should this be "io type" instead?
   return io_context.executor()->Submit(hints, io_context.stop_token(),
                                        std::forward<SubmitArgs>(submit_args)...);
 }

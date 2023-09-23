@@ -186,7 +186,7 @@ class ARROW_EXPORT MemoryMappedFile : public ReadWriteFileInterface {
 
   // Synchronous ReadAsync override
   Future<std::shared_ptr<Buffer>> ReadAsync(const IOContext&, int64_t position,
-                                            int64_t nbytes) override;
+                                            int64_t nbytes, int priority=0) override;
 
   Status WillNeed(const std::vector<ReadRange>& ranges) override;
 

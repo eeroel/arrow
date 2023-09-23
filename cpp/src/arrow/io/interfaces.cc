@@ -125,7 +125,7 @@ Future<std::shared_ptr<const KeyValueMetadata>> InputStream::ReadMetadataAsync(
     const IOContext& ctx) {
   std::shared_ptr<InputStream> self =
       std::dynamic_pointer_cast<InputStream>(shared_from_this());
-  return DeferNotOk(internal::SubmitIO(ctx, [self] { return self->ReadMetadata(); }));
+  return DeferNotOk(internal::SubmitIO(ctx, 0, [self] { return self->ReadMetadata(); }));
 }
 
 Future<std::shared_ptr<const KeyValueMetadata>> InputStream::ReadMetadataAsync() {
@@ -165,15 +165,17 @@ Result<std::shared_ptr<Buffer>> RandomAccessFile::ReadAt(int64_t position,
 // Default ReadAsync() implementation: simply issue the read on the context's executor
 Future<std::shared_ptr<Buffer>> RandomAccessFile::ReadAsync(const IOContext& ctx,
                                                             int64_t position,
-                                                            int64_t nbytes) {
+                                                            int64_t nbytes,
+                                                            int priority) {
   auto self = std::dynamic_pointer_cast<RandomAccessFile>(shared_from_this());
   return DeferNotOk(internal::SubmitIO(
-      ctx, [self, position, nbytes] { return self->ReadAt(position, nbytes); }));
+      ctx, priority, [self, position, nbytes] { return self->ReadAt(position, nbytes); }));
 }
 
 Future<std::shared_ptr<Buffer>> RandomAccessFile::ReadAsync(int64_t position,
-                                                            int64_t nbytes) {
-  return ReadAsync(io_context(), position, nbytes);
+                                                            int64_t nbytes,
+                                                            int priority) {
+  return ReadAsync(io_context(), position, nbytes, priority);
 }
 
 std::vector<Future<std::shared_ptr<Buffer>>> RandomAccessFile::ReadManyAsync(

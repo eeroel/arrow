@@ -695,7 +695,8 @@ Result<std::shared_ptr<Buffer>> MemoryMappedFile::Read(int64_t nbytes) {
 
 Future<std::shared_ptr<Buffer>> MemoryMappedFile::ReadAsync(const IOContext&,
                                                             int64_t position,
-                                                            int64_t nbytes) {
+                                                            int64_t nbytes,
+                                                            int priority) {
   return Future<std::shared_ptr<Buffer>>::MakeFinished(ReadAt(position, nbytes));
 }
 

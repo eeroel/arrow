@@ -172,10 +172,10 @@ class ARROW_EXPORT BufferReader
   bool supports_zero_copy() const override;
 
   std::shared_ptr<Buffer> buffer() const { return buffer_; }
-
+  
   // Synchronous ReadAsync override
   Future<std::shared_ptr<Buffer>> ReadAsync(const IOContext&, int64_t position,
-                                            int64_t nbytes) override;
+                                            int64_t nbytes, int priority = 0) override;
   Status WillNeed(const std::vector<ReadRange>& ranges) override;
 
  protected:

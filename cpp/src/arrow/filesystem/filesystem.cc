@@ -154,7 +154,7 @@ auto FileSystemDefer(FileSystem* fs, bool synchronous, DeferredFunc&& func)
     return std::forward<DeferredFunc>(func)(std::move(self));
   }
   return DeferNotOk(io::internal::SubmitIO(
-      fs->io_context(), std::forward<DeferredFunc>(func), std::move(self)));
+      fs->io_context(), 0, std::forward<DeferredFunc>(func), std::move(self)));
 }
 
 }  // namespace

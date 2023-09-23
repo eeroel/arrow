@@ -140,7 +140,8 @@ class TrackedRandomAccessFileImpl : public TrackedRandomAccessFile {
     return delegate_->ReadAt(position, nbytes);
   }
   Future<std::shared_ptr<Buffer>> ReadAsync(const io::IOContext& io_context,
-                                            int64_t position, int64_t nbytes) override {
+                                            int64_t position, int64_t nbytes,
+                                            int priority = 0) override {
     SaveReadRange(position, nbytes);
     return delegate_->ReadAsync(io_context, position, nbytes);
   }

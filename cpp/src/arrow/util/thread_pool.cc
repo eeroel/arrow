@@ -25,6 +25,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <chrono>
 
 #include "arrow/util/atfork_internal.h"
 #include "arrow/util/config.h"
@@ -46,10 +47,15 @@ void Executor::KeepAlive(std::shared_ptr<Resource> resource) {}
 
 namespace {
 
+using Clock = std::chrono::high_resolution_clock;
+using TimePoint = std::chrono::time_point<Clock>;
+
 struct Task {
   FnOnce<void()> callable;
   StopToken stop_token;
   Executor::StopCallback stop_callback;
+  int priority = 0; // the lower the more urgent, see TaskHints.priority
+  TimePoint timestamp {};
 };
 
 }  // namespace
@@ -372,6 +378,15 @@ void SerialExecutor::RunLoop() {
 
 #ifdef ARROW_ENABLE_THREADING
 
+auto cmp = [](Task &left, Task &right) {
+    if (left.priority == right.priority) {
+      return left.timestamp < right.timestamp;
+    } else {
+      // NOTE: smaller value means higher priority
+      return left.priority > right.priority;
+    };
+};
+
 struct ThreadPool::State {
   State() = default;
 
@@ -386,14 +401,15 @@ struct ThreadPool::State {
   std::list<std::thread> workers_;
   // Trashcan for finished threads
   std::vector<std::thread> finished_workers_;
-  std::deque<Task> pending_tasks_;
+
+  std::priority_queue<Task, std::deque<Task>, decltype(cmp)> pending_tasks_ {cmp};
 
   // Desired number of threads
   int desired_capacity_ = 0;
 
   // Total number of tasks that are either queued or running
   int tasks_queued_or_running_ = 0;
-
+  
   // Are we shutting down?
   bool please_shutdown_ = false;
   bool quick_shutdown_ = false;
@@ -449,8 +465,8 @@ static void WorkerLoop(std::shared_ptr<ThreadPool::State> state,
 
       DCHECK_GE(state->tasks_queued_or_running_, 0);
       {
-        Task task = std::move(state->pending_tasks_.front());
-        state->pending_tasks_.pop_front();
+        Task task = std::move(state->pending_tasks_.top());
+        state->pending_tasks_.pop();
         StopToken* stop_token = &task.stop_token;
         lock.unlock();
         if (!stop_token->IsStopRequested()) {
@@ -589,7 +605,10 @@ Status ThreadPool::Shutdown(bool wait) {
   if (!state_->quick_shutdown_) {
     DCHECK_EQ(state_->pending_tasks_.size(), 0);
   } else {
-    state_->pending_tasks_.clear();
+    // state_->pending_tasks_.clear()
+    // TODO!
+    //std::priority_queue<Task, std::deque<Task>, decltype(cmp)> q(cmp);
+    //state_->pending_tasks_ = q;
   }
   CollectFinishedWorkersUnlocked();
   return Status::OK();
@@ -650,8 +669,11 @@ Status ThreadPool::SpawnReal(TaskHints hints, FnOnce<void()> task, StopToken sto
       // We can still spin up more workers so spin up a new worker
       LaunchWorkersUnlocked(/*threads=*/1);
     }
-    state_->pending_tasks_.push_back(
-        {std::move(task), std::move(stop_token), std::move(stop_callback)});
+
+    TimePoint timestamp = Clock::now();
+    state_->pending_tasks_.push(
+        Task {std::move(task), std::move(stop_token), std::move(stop_callback), std::move(hints.priority), std::move(timestamp)}
+    );
   }
   state_->cv_.notify_one();
   return Status::OK();
