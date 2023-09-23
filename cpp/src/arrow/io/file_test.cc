@@ -380,8 +380,8 @@ TEST_F(TestReadableFile, ReadAsync) {
   MakeTestFile();
   OpenFile();
 
-  auto fut1 = file_->ReadAsync({}, 1, 10);
-  auto fut2 = file_->ReadAsync({}, 0, 4);
+  auto fut1 = file_->ReadAsync({}, 1, 10, 1);
+  auto fut2 = file_->ReadAsync({}, 0, 4, 1);
   ASSERT_OK_AND_ASSIGN(auto buf1, fut1.result());
   ASSERT_OK_AND_ASSIGN(auto buf2, fut2.result());
   AssertBufferEqual(*buf1, "estdata");

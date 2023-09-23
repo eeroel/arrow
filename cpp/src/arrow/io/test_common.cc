@@ -143,7 +143,7 @@ class TrackedRandomAccessFileImpl : public TrackedRandomAccessFile {
                                             int64_t position, int64_t nbytes,
                                             int priority = 0) override {
     SaveReadRange(position, nbytes);
-    return delegate_->ReadAsync(io_context, position, nbytes);
+    return delegate_->ReadAsync(io_context, position, nbytes, priority);
   }
 
   int64_t num_reads() const override { return read_ranges_.size(); }

@@ -378,12 +378,13 @@ void SerialExecutor::RunLoop() {
 
 #ifdef ARROW_ENABLE_THREADING
 
-auto cmp = [](Task &left, Task &right) {
-    if (left.priority == right.priority) {
-      return left.timestamp < right.timestamp;
+auto cmp = [](std::shared_ptr<Task> left, std::shared_ptr<Task> right) {
+    if (left->priority == right->priority) {
+      // older elements should be returned first
+      return left->timestamp > right->timestamp;
     } else {
-      // NOTE: smaller value means higher priority
-      return left.priority > right.priority;
+      // priority is inverted
+      return left->priority < right->priority;
     };
 };
 
@@ -402,7 +403,7 @@ struct ThreadPool::State {
   // Trashcan for finished threads
   std::vector<std::thread> finished_workers_;
 
-  std::priority_queue<Task, std::deque<Task>, decltype(cmp)> pending_tasks_ {cmp};
+  std::priority_queue<std::shared_ptr<Task>, std::deque<std::shared_ptr<Task>>, decltype(cmp)> pending_tasks_ {cmp};
 
   // Desired number of threads
   int desired_capacity_ = 0;
@@ -465,15 +466,15 @@ static void WorkerLoop(std::shared_ptr<ThreadPool::State> state,
 
       DCHECK_GE(state->tasks_queued_or_running_, 0);
       {
-        Task task = std::move(state->pending_tasks_.top());
+        auto task = std::move(state->pending_tasks_.top());
         state->pending_tasks_.pop();
-        StopToken* stop_token = &task.stop_token;
+        StopToken* stop_token = &(task->stop_token);
         lock.unlock();
         if (!stop_token->IsStopRequested()) {
-          std::move(task.callable)();
+          std::move(task->callable)();
         } else {
-          if (task.stop_callback) {
-            std::move(task.stop_callback)(stop_token->Poll());
+          if (task->stop_callback) {
+            std::move(task->stop_callback)(stop_token->Poll());
           }
         }
         ARROW_UNUSED(std::move(task));  // release resources before waiting for lock
@@ -607,8 +608,9 @@ Status ThreadPool::Shutdown(bool wait) {
   } else {
     // state_->pending_tasks_.clear()
     // TODO!
-    //std::priority_queue<Task, std::deque<Task>, decltype(cmp)> q(cmp);
+    //std::priority_queue<std::shared_ptr<Task>, std::deque<std::shared_ptr<Task>>, decltype(cmp)> q(cmp);
     //state_->pending_tasks_ = q;
+    while(!state_->pending_tasks_.empty()) state_->pending_tasks_.pop();
   }
   CollectFinishedWorkersUnlocked();
   return Status::OK();
@@ -672,7 +674,9 @@ Status ThreadPool::SpawnReal(TaskHints hints, FnOnce<void()> task, StopToken sto
 
     TimePoint timestamp = Clock::now();
     state_->pending_tasks_.push(
+      std::make_shared<Task>(
         Task {std::move(task), std::move(stop_token), std::move(stop_callback), std::move(hints.priority), std::move(timestamp)}
+      )
     );
   }
   state_->cv_.notify_one();
