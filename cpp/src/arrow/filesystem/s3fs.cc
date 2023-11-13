@@ -55,26 +55,27 @@
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/S3Errors.h>
-#include <aws/s3/model/AbortMultipartUploadRequest.h>
-#include <aws/s3/model/CompleteMultipartUploadRequest.h>
-#include <aws/s3/model/CompletedMultipartUpload.h>
-#include <aws/s3/model/CompletedPart.h>
-#include <aws/s3/model/CopyObjectRequest.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/CreateMultipartUploadRequest.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
-#include <aws/s3/model/DeleteObjectRequest.h>
-#include <aws/s3/model/DeleteObjectsRequest.h>
-#include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/HeadBucketRequest.h>
-#include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/ListBucketsResult.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/ObjectCannedACL.h>
-#include <aws/s3/model/PutObjectRequest.h>
-#include <aws/s3/model/UploadPartRequest.h>
+#include <aws/s3-crt/S3CrtClient.h>
+#include <aws/s3-crt/ClientConfiguration.h>
+#include <aws/s3-crt/S3CrtErrors.h>
+#include <aws/s3-crt/model/AbortMultipartUploadRequest.h>
+#include <aws/s3-crt/model/CompleteMultipartUploadRequest.h>
+#include <aws/s3-crt/model/CompletedMultipartUpload.h>
+#include <aws/s3-crt/model/CompletedPart.h>
+#include <aws/s3-crt/model/CopyObjectRequest.h>
+#include <aws/s3-crt/model/CreateBucketRequest.h>
+#include <aws/s3-crt/model/CreateMultipartUploadRequest.h>
+#include <aws/s3-crt/model/DeleteBucketRequest.h>
+#include <aws/s3-crt/model/DeleteObjectRequest.h>
+#include <aws/s3-crt/model/DeleteObjectsRequest.h>
+#include <aws/s3-crt/model/GetObjectRequest.h>
+#include <aws/s3-crt/model/HeadBucketRequest.h>
+#include <aws/s3-crt/model/HeadObjectRequest.h>
+#include <aws/s3-crt/model/ListBucketsResult.h>
+#include <aws/s3-crt/model/ListObjectsV2Request.h>
+#include <aws/s3-crt/model/ObjectCannedACL.h>
+#include <aws/s3-crt/model/PutObjectRequest.h>
+#include <aws/s3-crt/model/UploadPartRequest.h>
 
 // AWS_SDK_VERSION_{MAJOR,MINOR,PATCH} are available since 1.9.7.
 #if defined(AWS_SDK_VERSION_MAJOR) && defined(AWS_SDK_VERSION_MINOR) && \
@@ -137,9 +138,12 @@ using io::internal::SubmitIO;
 
 namespace fs {
 
+using namespace Aws::Http;
+using namespace Aws::Client;
+
 using ::Aws::Client::AWSError;
-using ::Aws::S3::S3Errors;
-namespace S3Model = Aws::S3::Model;
+using ::Aws::S3Crt::S3CrtErrors;
+namespace S3Model = Aws::S3Crt::Model;
 
 using internal::ConnectRetryStrategy;
 using internal::DetectS3Backend;
@@ -583,9 +587,9 @@ class WrappedRetryStrategy : public Aws::Client::RetryStrategy {
   std::shared_ptr<S3RetryStrategy> s3_retry_strategy_;
 };
 
-class S3Client : public Aws::S3::S3Client {
+class S3Client : public Aws::S3Crt::S3CrtClient {
  public:
-  using Aws::S3::S3Client::S3Client;
+  using Aws::S3Crt::S3CrtClient::S3CrtClient;
 
   // To get a bucket's region, we must extract the "x-amz-bucket-region" header
   // from the response to a HEAD bucket request.
@@ -687,7 +691,7 @@ class S3Client : public Aws::S3::S3Client {
 
     for (int32_t retries = 0;; retries++) {
       aws_error.reset();
-      auto outcome = Aws::S3::S3Client::S3Client::CompleteMultipartUpload(request);
+      auto outcome = Aws::S3Crt::S3CrtClient::CompleteMultipartUpload(request);
       if (!outcome.IsSuccess()) {
         // Error returned in HTTP headers (or client failure)
         return outcome;
@@ -713,14 +717,14 @@ class S3Client : public Aws::S3::S3Client {
     }
 
     DCHECK(aws_error.has_value());
-    auto s3_error = AWSError<S3Errors>(std::move(aws_error).value());
+    auto s3_error = AWSError<S3CrtErrors>(std::move(aws_error).value());
     return S3Model::CompleteMultipartUploadOutcome(std::move(s3_error));
   }
 
   std::shared_ptr<S3RetryStrategy> s3_retry_strategy_;
 };
 
-// In AWS SDK < 1.8, Aws::Client::ClientConfiguration::followRedirects is a bool.
+// In AWS SDK < 1.8, Aws::S3Crt::ClientConfiguration::followRedirects is a bool.
 template <bool Never = false>
 void DisableRedirectsImpl(bool* followRedirects) {
   *followRedirects = false;
@@ -732,7 +736,7 @@ void DisableRedirectsImpl(PolicyEnum* followRedirects) {
   *followRedirects = Never;
 }
 
-void DisableRedirects(Aws::Client::ClientConfiguration* c) {
+void DisableRedirects(Aws::S3Crt::ClientConfiguration* c) {
   DisableRedirectsImpl(&c->followRedirects);
 }
 
@@ -852,6 +856,7 @@ class S3ClientFinalizer : public std::enable_shared_from_this<S3ClientFinalizer>
 Result<S3ClientLock> S3ClientHolder::Lock() {
   std::shared_ptr<S3ClientFinalizer> finalizer;
   std::shared_ptr<S3Client> client;
+  
   {
     std::unique_lock lock(mutex_);
     finalizer = finalizer_.lock();
@@ -903,6 +908,7 @@ Result<std::shared_ptr<S3ClientHolder>> GetClientHolder(
   return GetClientFinalizer()->AddClient(std::move(client));
 }
 
+
 // -----------------------------------------------------------------------
 // S3 client factory: build S3Client from S3Options
 
@@ -910,9 +916,9 @@ class ClientBuilder {
  public:
   explicit ClientBuilder(S3Options options) : options_(std::move(options)) {}
 
-  const Aws::Client::ClientConfiguration& config() const { return client_config_; }
+  const Aws::S3Crt::ClientConfiguration& config() const { return client_config_; }
 
-  Aws::Client::ClientConfiguration* mutable_config() { return &client_config_; }
+  Aws::S3Crt::ClientConfiguration* mutable_config() { return &client_config_; }
 
   Result<std::shared_ptr<S3ClientHolder>> BuildClient(
       std::optional<io::IOContext> io_context = std::nullopt) {
@@ -994,7 +1000,7 @@ class ClientBuilder {
 
  protected:
   S3Options options_;
-  Aws::Client::ClientConfiguration client_config_;
+  Aws::S3Crt::ClientConfiguration client_config_;
   std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_provider_;
 };
 
@@ -1098,7 +1104,7 @@ Aws::IOStreamFactory AwsWriteableStreamFactory(void* data, int64_t nbytes) {
   return [=]() { return Aws::New<StringViewStream>("", data, nbytes); };
 }
 
-Result<S3Model::GetObjectResult> GetObjectRange(Aws::S3::S3Client* client,
+Result<S3Model::GetObjectResult> GetObjectRange(Aws::S3Crt::S3CrtClient* client,
                                                 const S3Path& path, int64_t start,
                                                 int64_t length, void* out) {
   S3Model::GetObjectRequest req;
@@ -2487,7 +2493,7 @@ class S3FileSystem::Impl : public std::enable_shared_from_this<S3FileSystem::Imp
   }
 
   static Result<std::vector<std::string>> ProcessListBuckets(
-      const Aws::S3::Model::ListBucketsOutcome& outcome) {
+      const Aws::S3Crt::Model::ListBucketsOutcome& outcome) {
     if (!outcome.IsSuccess()) {
       return ErrorToStatus(std::forward_as_tuple("When listing buckets: "), "ListBuckets",
                            outcome.GetError());

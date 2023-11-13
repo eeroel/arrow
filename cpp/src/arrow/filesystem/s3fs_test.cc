@@ -198,7 +198,7 @@ class S3TestMixin : public AwsTestMixin {
  protected:
   Status InitServerAndClient() {
     ARROW_ASSIGN_OR_RAISE(minio_, GetMinioEnv()->GetOneServer());
-    client_config_.reset(new Aws::Client::ClientConfiguration());
+    client_config_.reset(new Aws::S3Crt::ClientConfiguration());
     client_config_->endpointOverride = ToAwsString(minio_->connect_string());
     client_config_->scheme = Aws::Http::Scheme::HTTP;
     client_config_->retryStrategy =
@@ -216,7 +216,7 @@ class S3TestMixin : public AwsTestMixin {
   static constexpr int kNumServerRetries = 3;
 
   std::shared_ptr<MinioTestServer> minio_;
-  std::unique_ptr<Aws::Client::ClientConfiguration> client_config_;
+  std::unique_ptr<Aws::S3Crt::ClientConfiguration> client_config_;
   Aws::Auth::AWSCredentials credentials_;
   std::unique_ptr<Aws::S3::S3Client> client_;
 };

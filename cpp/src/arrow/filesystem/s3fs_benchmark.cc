@@ -185,7 +185,7 @@ class MinioFixture : public benchmark::Fixture {
   std::unique_ptr<MinioTestServer> minio_;
   std::string region_;
   std::string bucket_;
-  Aws::Client::ClientConfiguration client_config_;
+  Aws::S3Crt::ClientConfiguration client_config_;
   Aws::Auth::AWSCredentials credentials_;
   std::unique_ptr<Aws::S3::S3Client> client_;
   S3Options options_;
